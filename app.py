@@ -3,41 +3,43 @@ import operator
 import os
 import random
 
+import dozer
 import flask
 import objgraph
+
+app = flask.Flask(__name__)
+app.secret_key = "it's a secret to everyone"
+
+# Dozer
+app.wsgi_app = dozer.Dozer(app.wsgi_app)
+
+#
+# Our leaky app -- simulate a leak by storing some objects in a global var.
+#
 
 LEAKY = []
 class Leaker(object):
     pass
 
-app = flask.Flask(__name__)
-app.secret_key = "it's a secret to everyone"
-
 @app.route('/')
 def index():
-    # Simulate a "leak" by storing some Leakers in a global.
     for i in range(random.randint(0, 1000)):
         LEAKY.append(Leaker())
     return "drip drip"
 
-@app.route('/mem')
-def mem():
-    return flask.render_template('mem.html',
-        common_types = objgraph.most_common_types(),
-        growth = _object_growth(),
-    )
-
-def _object_growth():
+@app.route('/growth')
+def object_growth():
     """
     Shows changes in allocations, like objgraph.show_growth(), except:
 
-    - show_growth() prints to stdout, which we don't want, so this just returns.
+    - show_growth() prints to stdout, this is flask view.
+
     - this saves the peaks in the session, so that each user sees the changes
-      between *their* last page load, not some global.
-    - this function is obsessively commented :)
+      between their last page load, not some global.
+
+    - this function is commented :)
 
     """
-
     # We don't want our numbers crudded up by a GC cycle that hasn't run yet,
     # so force GC before we gather stats.
     gc.collect()
@@ -64,8 +66,12 @@ def _object_growth():
     # Flask won't notice that it's changed.
     flask.session['peak_stats'] = peak_stats
 
-    # Return (type-name, delta) tuples, sorted by objects with the biggest growth.
-    return sorted(deltas.items(), key=operator.itemgetter(1), reverse=True)
+    # Create (type-name, delta) tuples, sorted by objects with the biggest growth.
+    deltas = sorted(deltas.items(), key=operator.itemgetter(1), reverse=True)
+
+    return flask.render_template('growth.html',
+        growth = deltas,
+    )
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

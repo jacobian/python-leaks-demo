@@ -1,0 +1,9 @@
+<h2>New allocations, by type, since last load of this page:</h2>
+<table>
+  {% for type, increase in growth %}
+    <tr>
+      <td>{{ type }}</td>
+      <td>+{{ increase }}</td>
+    </tr>
+  {% endfor %}
+</table>
